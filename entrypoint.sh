@@ -13,6 +13,7 @@ MEDIA="${MEDIA:-/media}"
 TMP="${TMP:-/tmp}"
 DEBUG="${DEBUG:-}"
 FORCE="${FORCE:-}"
+NOMODESET="${NOMODESET:-}"
 TIMEOUT="${TIMEOUT:-5}"
 
 # Check input parameters and existence of preseed.cfg.
@@ -57,23 +58,7 @@ update_md5() {
       sed -i "s,^[0-9a-f]*  ${LISTNAME}$,${MD5SUM}," "${MEDIA}/md5sum.txt"
 }
 
-# Add preseed to all "initrd"s.
-# Slightly more convoluted than just copying it to the file system.
-# During installation, it is mounted under /mnt/preseed.cfg.
-preseed_into_initrd() {
-  for i in $(find "${MEDIA}/install.amd" -follow -type f -name initrd.gz)
-  do
-    gunzip "$i"
-    NOGZ="${i%%.gz}"
-    echo "${MNT}/preseed.cfg" | cpio -H newc -o -A -F "$NOGZ"
-    gzip "$NOGZ"
-
-    update_md5 "$i"
-  done
-  PRESEED="file=file:///mnt/preseed.cfg"
-}
-
-# Add preseed onto the ISO filesystem. Simple solution.
+# Add preseed onto the ISO filesystem.
 # During installation, it is mounted under /cdrom/preseed.cfg.
 preseed_onto_fs() {
   cp "${MNT}/preseed.cfg" "${MEDIA}"
@@ -81,7 +66,17 @@ preseed_onto_fs() {
   PRESEED="file=file:///cdrom/preseed.cfg"
 }
 
-# Set default menu entry for UEFI boot
+# Add the firmware folder to the ISO filesystem, if exists.
+# During installation, it is mounted under /cdrom/firmware.
+firmware_onto_fs() {
+  if [ -d "${MNT}/firmware" ]; then
+    cp -r "${MNT}/firmware" "${MEDIA}"
+    cd "${MEDIA}"
+    find ./firmware -type f -exec sh -c 'md5sum "$1" >> "${MEDIA}/md5sum.txt"' \;
+  fi
+}
+
+# Set default menu entry for BIOS boot
 bios_set_default_entry() {
   # FORCE=no: We will add preseed.cfg to only the "Automated install" entries in the boot menu.
   if [ -z "${FORCE}" ]; then
@@ -104,6 +99,9 @@ bios_set_default_entry() {
     update_md5 "${MEDIA}"/isolinux/menu.cfg
     # Add preseed.cfg to automatic installation menu items.
     APPEND="${PRESEED}"
+    if [ -n "${NOMODESET}" ]; then
+      APPEND="${APPEND} nomodeset"
+    fi
     grep -l "auto=true" "${MEDIA}"/isolinux/*.cfg | while IFS= read -r line
     do
       sed -i 's@auto=true@'"$APPEND auto=true"'@' "$line"
@@ -112,6 +110,9 @@ bios_set_default_entry() {
   # FORCE=yes: We will add preseed.cfg to all the entries in the boot menu.
   else
     APPEND="${PRESEED} auto=true" #Note: in some menu items "auto=true" will show twice. That's ok.
+    if [ -n "${NOMODESET}" ]; then
+      APPEND="${APPEND} nomodeset"
+    fi
     for i in "${MEDIA}"/isolinux/*.cfg
     do
       sed -i 's@\---@'"$APPEND ---"'@' "$i"
@@ -123,11 +124,15 @@ bios_set_default_entry() {
   update_md5 "${MEDIA}"/isolinux/isolinux.cfg
 }
 
+# Set default menu entry for UEFI boot
 uefi_set_default_entry() {
   # FORCE=no: We will add preseed.cfg to only the "Automated install" entries in the boot menu.
   if [ -z "${FORCE}" ]; then
     # Add preseed.cfg to automatic installation menu items.
     APPEND="${PRESEED}"
+    if [ -n "${NOMODESET}" ]; then
+      APPEND="${APPEND} nomodeset"
+    fi
     sed -i 's@auto=true@'"$APPEND auto=true"'@' "${MEDIA}"/boot/grub/grub.cfg
     # Set default entry and timeout
     sed -i '/insmod play/ a default='\'"2"\''\ntimeout='"${TIMEOUT}"'' "${MEDIA}"/boot/grub/grub.cfg
@@ -138,6 +143,9 @@ uefi_set_default_entry() {
   # FORCE=yes: We will add preseed.cfg to all the entries in the boot menu.
   else
     APPEND="${PRESEED} auto=true" #Note: in some menu items "auto=true" will show twice. That's ok.
+    if [ -n "${NOMODESET}" ]; then
+      APPEND="${APPEND} nomodeset"
+    fi
     sed -i 's@\---@'"$APPEND ---"'@' "${MEDIA}"/boot/grub/grub.cfg
     sed -i '/insmod play/ a timeout='"${TIMEOUT}"'' "${MEDIA}"/boot/grub/grub.cfg
     update_md5 "${MEDIA}"/boot/grub/grub.cfg
@@ -166,6 +174,7 @@ check_input
 get_iso
 unpack_iso
 preseed_onto_fs
+firmware_onto_fs
 bios_set_default_entry
 uefi_set_default_entry
 build_iso

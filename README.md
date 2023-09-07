@@ -33,6 +33,7 @@ In this case it's the user's responsibility to make sure that the ISO is valid.
 * You can add `-e VERSION=11.6.0` environment variable to the docker execution to download a different Debian version.
 * You can add `-e NAME=custom` environment variable that will be used to name the output image. (Well the last section of it.)
 * You can add `-e TIMEOUT=5` environment variable that will be used to set the bootloader menu timeout _in seconds_.
+* You can add `-e NOMODESET=1` environment variable that will be used to disable graphics card acceleration for the installer. (Unset by default.)
 
 ## I don't have Docker
 Docker is only used to simplify the environment setup. You can run the embedded script without Docker, if you set up your
@@ -43,11 +44,10 @@ download and verify it for you.
 * Have a generic set of Linux commands available: `cpio`, `sed`, `md5sum`, `gzip`/`gunzip`, `find`, `dd`.
 
 Additional environment variables are available to configure the script:
-* `DEBUG=1` will enable tracing the script line-by-line as well as not removing some of the temporary files.
+* `DEBUG=1` will enable tracing the script line-by-line as well as not removing some temporary files. (Unset by default.)
 * `MNT=/mnt` will tell the script where the input files (preseed.cfg and optionally an official ISO image) are located
 on the file system
 * `MEDIA=/media` will tell the script where to expand the official ISO image.
 * `TMP=/tmp` will mount the temporary folder somewhere else.
-* `FORCE=1` (not set, only used for troubleshooting) will force ALL the boot menu items to be automated installations
-with the `preseed.cfg` set. If this is not set, only the "Automated ..." items are set and the boot menu defaults to
-the automated graphical installation.
+* `FORCE=1` will force ALL the boot menu items to be automated installations with the `preseed.cfg` set.
+If this is not set, only the "Automated ..." items are set and the boot menu defaults to the automated graphical installation. (Unset by default.)
